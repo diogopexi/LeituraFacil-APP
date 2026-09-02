@@ -1,0 +1,27 @@
+@import './base.css';
+
+html,
+body {
+    height: 100%;
+    overflow: hidden;
+}
+
+button {
+  background-color: var(--color-button);
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: var(--color-button-hover);
+}
+
+input:where([type="text"], [type="email"], [type="password"], [type="number"]),
+textarea, select {
+  background: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-light);
+}
