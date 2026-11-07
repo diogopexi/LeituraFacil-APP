@@ -1,5 +1,9 @@
 {
   "appId": "br.com.leiturafacil.app",
   "appName": "Leitura Facil",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http"
+  }
 }
+

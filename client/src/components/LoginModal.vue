@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import GoogleLoginButton from './GoogleLoginButton.vue'
 
 defineProps({
     show: Boolean
@@ -9,6 +11,7 @@ defineProps({
 const emit = defineEmits(['close', 'switch-to-register'])
 
 const userStore = useUserStore()
+const router = useRouter()
 const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
@@ -25,6 +28,9 @@ const handleLogin = async () => {
         errorMessage.value = error.message || 'Erro ao fazer login'
     }
 }
+
+const handleGoogleSuccess = () => { email.value = ''; password.value = ''; emit('close') }
+const handleGoogleError = (error) => { errorMessage.value = error?.message || 'Erro ao entrar com Google' }
 
 const switchForm = () => {
     emit('switch-to-register')
@@ -57,6 +63,11 @@ const switchForm = () => {
                     {{ userStore.loading ? 'Entrando...' : 'Entrar' }}
                 </button>
             </form>
+
+            <div class="divider"><span>ou</span></div>
+            <GoogleLoginButton @success="handleGoogleSuccess" @error="handleGoogleError" />
+
+            <button v-if="errorMessage.includes('Confirme seu e-mail')" type="button" class="verify-link" @click="router.push({ path: '/verificar-email', query: { email: email } }); emit('close')">Verificar meu e-mail</button>
 
             <p class="form-switch">
                 Não tem conta?
@@ -182,7 +193,7 @@ input:focus {
     cursor: not-allowed;
 }
 
-.form-switch {
+.divider{display:flex;align-items:center;gap:10px;margin:18px 0 0;color:var(--color-text-muted);font-size:11px}.divider::before,.divider::after{content:"";height:1px;background:var(--color-border-light);flex:1}.verify-link{width:100%;margin-top:8px;border:1px solid var(--color-border-light);background:var(--color-surface);color:var(--color-button);padding:9px;border-radius:6px;font-weight:700}.form-switch {
     text-align: center;
     margin-top: 16px;
     font-size: 14px;

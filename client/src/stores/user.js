@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { usePreferencesStore } from './preferences'
 
-const API_BASE = import.meta.env.VITE_API_BASE
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 export const useUserStore = defineStore('user', () => {
   const user = ref(null)
@@ -31,13 +31,19 @@ export const useUserStore = defineStore('user', () => {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await readJsonSafe(response)
         throw new Error(errorData.erro || 'Erro ao registrar')
       }
 
-      const data = await response.json()
-      // After registration, automatically log in
-      await login(email, password)
+      const data = await readJsonSafe(response)
+      if (data.token && data.user) {
+        user.value = data.user
+        token.value = data.token
+        localStorage.setItem('authToken', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        const preferencesStore = usePreferencesStore()
+        preferencesStore.loadFromUser(data.user)
+      }
       return data
     } catch (err) {
       error.value = err.message
@@ -64,11 +70,11 @@ export const useUserStore = defineStore('user', () => {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await readJsonSafe(response)
         throw new Error(errorData.erro || 'Erro ao fazer login')
       }
 
-      const data = await response.json()
+      const data = await readJsonSafe(response)
       user.value = data.user
       token.value = data.token
       localStorage.setItem('authToken', data.token)
@@ -82,6 +88,21 @@ export const useUserStore = defineStore('user', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  const loginWithGoogle = async (credential) => {
+    loading.value = true
+    error.value = null
+    try {
+      const response = await fetch(`${API_BASE}/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential }) })
+      const data = await readJsonSafe(response)
+      if (!response.ok) throw new Error(data.erro || 'Erro ao entrar com Google')
+      user.value = data.user; token.value = data.token
+      localStorage.setItem('authToken', data.token); localStorage.setItem('user', JSON.stringify(data.user))
+      usePreferencesStore().loadFromUser(data.user)
+      return data
+    } catch (err) { error.value = err.message; throw err }
+    finally { loading.value = false }
   }
 
   // Logout user
@@ -119,7 +140,14 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     register,
     login,
+    loginWithGoogle,
     logout,
     initializeUser,
   }
 })
+
+async function readJsonSafe(response) {
+  const text = await response.text()
+  if (!text.trim()) return {}
+  try { return JSON.parse(text) } catch { return { erro: text.slice(0, 180) } }
+}

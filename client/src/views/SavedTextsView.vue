@@ -8,6 +8,7 @@ import { useTextStore } from '@/stores/text';
 const router = useRouter();
 const userStore = useUserStore();
 const textStore = useTextStore();
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 const textos = ref([]);
 const loading = ref(true);
@@ -37,7 +38,7 @@ async function loadTextos() {
   error.value = '';
   try {
     const res = await axios.get(
-      `${import.meta.env.VITE_API_BASE}/users/${userStore.user._id}/textos`,
+      `${API_BASE}/users/${userStore.user._id}/textos`,
       { headers: { Authorization: `Bearer ${userStore.token}` } }
     );
     textos.value = res.data;
@@ -51,13 +52,13 @@ async function loadTextos() {
 async function openTexto(texto) {
   try {
     const res = await axios.get(
-      `${import.meta.env.VITE_API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
+      `${API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
       { headers: { Authorization: `Bearer ${userStore.token}` } }
     );
     const { titulo, conteudo } = res.data;
 
     const tokensRes = await axios.post(
-      `${import.meta.env.VITE_API_BASE}/read`,
+      `${API_BASE}/read`,
       { text: conteudo }
     );
 
@@ -66,7 +67,7 @@ async function openTexto(texto) {
     textStore.setSavedId(texto._id);
 
     await axios.put(
-      `${import.meta.env.VITE_API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
+      `${API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
       { titulo, conteudo },
       { headers: { Authorization: `Bearer ${userStore.token}` } }
     );
@@ -101,7 +102,7 @@ async function handleDelete() {
   if (!confirm(`Excluir "${texto.titulo}"?`)) return;
   try {
     await axios.delete(
-      `${import.meta.env.VITE_API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
+      `${API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
       { headers: { Authorization: `Bearer ${userStore.token}` } }
     );
     textos.value = textos.value.filter(t => t._id !== texto._id);
@@ -113,7 +114,7 @@ async function handleDelete() {
 async function saveEdit(texto) {
   try {
     await axios.put(
-      `${import.meta.env.VITE_API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
+      `${API_BASE}/users/${userStore.user._id}/textos/${texto._id}`,
       { titulo: editTitle.value },
       { headers: { Authorization: `Bearer ${userStore.token}` } }
     );
@@ -138,7 +139,11 @@ onMounted(() => {
     router.push('/');
     return;
   }
-  loadTextos();
+  loadTextos().then(() => {
+    const id = router.currentRoute.value.query.abrir;
+    const texto = textos.value.find(t => t._id === id);
+    if (texto) openTexto(texto);
+  });
 });
 </script>
 

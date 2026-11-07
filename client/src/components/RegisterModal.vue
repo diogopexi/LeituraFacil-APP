@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import GoogleLoginButton from './GoogleLoginButton.vue'
 
 defineProps({
     show: Boolean
@@ -9,24 +11,33 @@ defineProps({
 const emit = defineEmits(['close', 'switch-to-login'])
 
 const userStore = useUserStore()
+const router = useRouter()
 const name = ref('')
 const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
+const successMessage = ref('')
 
 const handleRegister = async () => {
     errorMessage.value = ''
+    successMessage.value = ''
     try {
-        await userStore.register(name.value, email.value, password.value)
-        // Reset form and close modal on success
+        const data = await userStore.register(name.value, email.value, password.value)
         name.value = ''
-        email.value = ''
         password.value = ''
+        if (data.verificationRequired) {
+            successMessage.value = data.verificationSent ? 'Conta criada! Enviamos um código de 6 dígitos para confirmar seu e-mail.' : 'Conta criada. O envio do código precisa ser configurado no servidor antes da verificação.'
+            return
+        }
+        email.value = ''
         emit('close')
     } catch (error) {
-        errorMessage.value = error.message || 'Erro ao registrar'
+        errorMessage.value = error.message?.includes('Failed to fetch') ? 'Não foi possível conectar ao servidor. Inicie o backend e tente novamente.' : (error.message || 'Erro ao registrar')
     }
 }
+
+const handleGoogleSuccess = () => { name.value = ''; email.value = ''; password.value = ''; emit('close') }
+const handleGoogleError = (error) => { errorMessage.value = error?.message || 'Erro ao entrar com Google' }
 
 const switchForm = () => {
     emit('switch-to-login')
@@ -41,9 +52,8 @@ const switchForm = () => {
             <h2>Registrar</h2>
 
             <form @submit.prevent="handleRegister">
-                <div v-if="errorMessage" class="error-message">
-                    {{ errorMessage }}
-                </div>
+                <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+                <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
 
                 <div class="form-group">
                     <label for="name">Nome</label>
@@ -64,6 +74,11 @@ const switchForm = () => {
                     {{ userStore.loading ? 'Registrando...' : 'Registrar' }}
                 </button>
             </form>
+
+            <div class="divider"><span>ou</span></div>
+            <GoogleLoginButton @success="handleGoogleSuccess" @error="handleGoogleError" />
+
+            <button v-if="successMessage && !userStore.isLoggedIn()" type="button" class="verify-link" @click="router.push({ path: '/verificar-email', query: { email: email } }); emit('close')">Ir para verificação de e-mail</button>
 
             <p class="form-switch">
                 Já tem conta?
@@ -131,7 +146,7 @@ h2 {
     color: var(--color-text);
 }
 
-.error-message {
+.success-message{background:var(--color-success);color:#fff;padding:10px 12px;border-radius:4px;margin-bottom:16px;font-size:14px}.error-message {
     background-color: var(--color-error-background);
     color: var(--color-error);
     border: 1px solid var(--color-error-border);
@@ -190,7 +205,7 @@ input:focus {
     cursor: not-allowed;
 }
 
-.form-switch {
+.divider{display:flex;align-items:center;gap:10px;margin:18px 0 0;color:var(--color-text-muted);font-size:11px}.divider::before,.divider::after{content:"";height:1px;background:var(--color-border-light);flex:1}.form-switch {
     text-align: center;
     margin-top: 16px;
     font-size: 14px;
@@ -207,7 +222,7 @@ input:focus {
     text-decoration: none;
 }
 
-.link-btn:hover {
+.verify-link{width:100%;margin-top:8px;border:1px solid var(--color-border-light);background:var(--color-surface);color:var(--color-button);padding:9px;border-radius:6px;font-weight:700}.link-btn:hover {
     text-decoration: underline;
 }
 </style>

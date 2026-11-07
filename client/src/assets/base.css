@@ -1,106 +1,62 @@
-/* semantic color variables for this project */
 :root {
-  --color-background: #F7F5F0;
-  --color-background-darker: #E6DED4;
-
-  --color-header: #B7D3BA;
-  --color-button: #7C9A4A;
-  --color-button-hover: #6B853F;
-
-  --color-button-dark: #4A4A4A;
-  --color-button-dark-hover: #666666;
-
-  --color-text: #2F2F2F;
-
-  --color-surface: #FFFFFF;
-
-  --color-text-muted: #6F6F6F;
-
-  --color-border: #D8D2CA;
-  --color-border-light: #E7E2DB;
-
-  --color-danger: #D96B63;
-  --color-danger-hover: #C85A52;
-  --color-danger-light: #FBECEC;
-  --color-danger-light-hover: #F6DEDE;
-
-  --color-success: #4FAE74;
-  --color-success-hover: #449B67;
-
-  --color-error: #D45555;
-  --color-error-background: #FDEEEE;
-  --color-error-border: #F6CFCF;
-
-  --color-overlay: rgba(0, 0, 0, 0.35);
-  --color-glow: rgba(124, 154, 74, 0.12);
-
-  --section-gap: 160px;
+  --navy: #13264d;
+  --navy-2: #173a79;
+  --green: #42ad79;
+  --green-dark: #329566;
+  --green-soft: #e8f5ec;
+  --cream: #fbfaf7;
+  --cream-2: #f4f1e9;
+  --white: #ffffff;
+  --text: #17284b;
+  --muted: #5f6470;
+  --line: #e6e4dd;
+  --shadow: 0 14px 35px rgba(27, 44, 70, .08);
+  --danger: #d85555;
+  --color-background: var(--cream);
+  --color-surface: var(--white);
+  --color-text: var(--text);
+  --color-text-muted: var(--muted);
+  --color-border: #d8d9d4;
+  --color-border-light: #e7e8e3;
+  --color-button: var(--green);
+  --color-button-hover: var(--green-dark);
+  --color-success: var(--green);
+  --color-danger: #c95c58;
+  --color-danger-hover: #ad4a47;
+  --color-error: var(--danger);
+  --color-error-background: #fff1f1;
+  --color-error-border: #f1cccc;
+  --color-overlay: rgba(15, 29, 53, .42);
 }
-
 [data-theme="dark"] {
   color-scheme: dark;
-  --color-background: #181818;
-  --color-background-darker: #121212;
-
-  --color-header: #2A2A2A;
-  --color-button: #7A7A7A;
-  --color-button-hover: #888888;
-
-  --color-text: #E0E0E0;
-  --color-text-muted: #999999;
-
-  --color-surface: #222222;
-
-  --color-border: #333333;
-  --color-border-light: #3A3A3A;
-
-  --color-danger: #D47A74;
-  --color-danger-hover: #C46A64;
-  --color-danger-light: #3D2020;
-  --color-danger-light-hover: #4A2828;
-
-  --color-success: #6AAC84;
-  --color-success-hover: #7ABC94;
-
-  --color-error: #D46666;
-  --color-error-background: #2D1818;
-  --color-error-border: #422222;
-
-  --color-overlay: rgba(0, 0, 0, 0.5);
-  --color-glow: rgba(122, 122, 122, 0.15);
+  --cream: #101827;
+  --cream-2: #172033;
+  --white: #1b2536;
+  --text: #edf3ff;
+  --muted: #aeb8c8;
+  --line: #2d384b;
+  --color-background: #101827;
+  --color-surface: #1b2536;
+  --color-text: #edf3ff;
+  --color-text-muted: #aeb8c8;
+  --color-border: #354156;
+  --color-border-light: #2d384b;
 }
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  font-weight: normal;
-}
-
-body {
-  min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
-  transition:
-    color 0.5s,
-    background-color 0.5s;
-  line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
-  font-size: 15px;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+* { box-sizing: border-box; margin: 0; }
+html { scroll-behavior: smooth; }
+body { min-height: 100vh; background: var(--color-background); color: var(--color-text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+button, input, textarea, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+[data-theme="dark"] {
+  --navy: #dce7fa;
+  --navy-2: #9fc0ee;
+  --green: #63c996;
+  --green-dark: #4eae7f;
+  --green-soft: #203b35;
+  --danger: #ff8f8f;
+  --color-error: #ff9a9a;
+  --color-error-background: #3a2024;
+  --color-error-border: #63343b;
 }

@@ -1,31 +1,15 @@
 import { defineStore } from "pinia";
 
-const clamp = (value, min = 0) => Math.max(min, value);
-const round1 = (value) => Math.round(value * 10) / 10;
-
 export const usePaginationStore = defineStore("pagination", {
-  state: () => ({
-    maxWords: Infinity,
-    startIndex: 0,
-  }),
-
+  state: () => ({ maxWords: 90, startIndex: 0, pageSizeOption: "normal" }),
   actions: {
-    clearMaxWords() {
-      this.maxWords = Infinity;
-    },
-
-    increaseScroll() {
-      if (this.maxWords == Infinity) return;
-      this.startIndex = round1(this.startIndex + this.maxWords);
-    },
-
-    decreaseScroll() {
-      if (this.maxWords == Infinity) return;
-      this.startIndex = clamp(round1(this.startIndex - this.maxWords), 0);
-    },
-
-    resetScroll() {
+    setPageSize(size = "normal") {
+      this.pageSizeOption = String(size);
+      this.maxWords = this.pageSizeOption === "normal" ? 90 : Math.min(10, Math.max(1, Number(this.pageSizeOption) || 1));
       this.startIndex = 0;
     },
+    increaseScroll(totalWords = Infinity) { const next = this.startIndex + this.maxWords; if (next < totalWords) this.startIndex = next; },
+    decreaseScroll() { this.startIndex = Math.max(0, this.startIndex - this.maxWords); },
+    resetScroll() { this.startIndex = 0; this.maxWords = this.pageSizeOption === "normal" ? 90 : Math.min(10, Math.max(1, Number(this.pageSizeOption) || 1)); },
   },
 });

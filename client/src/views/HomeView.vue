@@ -1,168 +1,217 @@
 <script setup>
-import { ref } from 'vue';
-import axios from 'axios';
-import { useRouter } from 'vue-router';
-import { useTextStore } from '@/stores/text';
-import router from '@/router';
+import { ref, nextTick } from 'vue'
+import axios from 'axios'
+import { useRouter } from 'vue-router'
+import { useTextStore } from '@/stores/text'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 
-const text = ref('');
-const error = ref('');
-const fileInput = ref(null);
-const textStore = useTextStore();
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
+
+const router = useRouter()
+const textStore = useTextStore()
+const text = ref('')
+const error = ref('')
+const fileInput = ref(null)
+const editor = ref(null)
+const adapting = ref(false)
+\\const loadingFile = ref(false);
+
+
+
+\\function isPdf(file) {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
+
+
 
 async function pasteFromClipboard() {
   try {
-    const clipboardText = await navigator.clipboard.readText();
-    if (clipboardText) {
-      text.value += clipboardText;
-    }
+    const value = await navigator.clipboard.readText()
+    if (value) text.value += value
   } catch {
-    error.value = "Não foi possível acessar a área de transferência.";
+    error.value = 'Não foi possível acessar a área de transferência.'
   }
 }
+function triggerFileUpload() { fileInput.value?.click() }
+async function extractPdfText(file) {
+  const buffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+  const pages = []
 
-function triggerFileUpload() {
-  fileInput.value?.click();
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber)
+    const content = await page.getTextContent()
+    const items = content.items.filter(item => typeof item.str === 'string' && item.str.length)
+
+    if (!items.length) {
+      pages.push('')
+      continue
+    }
+
+    const lines = []
+    let currentLine = ''
+    let previousItem = null
+    let previousY = null
+
+    for (const item of items) {
+      const x = item.transform?.[4] ?? 0
+      const y = item.transform?.[5] ?? 0
+      const width = item.width ?? 0
+      const sameLine = previousY !== null && Math.abs(y - previousY) < 4
+
+      if (!sameLine && currentLine.trim()) {
+        lines.push(currentLine.trim())
+        currentLine = ''
+      }
+
+      if (currentLine && previousItem && sameLine) {
+        const previousText = previousItem.str || ''
+        const previousRight = (previousItem.transform?.[4] ?? 0) + (previousItem.width ?? 0)
+        const gap = x - previousRight
+        const fontSize = Math.abs(item.transform?.[3] ?? item.height ?? 10) || 10
+        const needsSpace = !/[\s]$/.test(previousText) && !/^[\s.,;:!?%)\]}]/.test(item.str) && gap > fontSize * 0.12
+        if (needsSpace) currentLine += ' '
+      }
+
+      currentLine += item.str
+      previousItem = item
+      previousY = y
+
+      if (item.hasEOL) {
+        if (currentLine.trim()) lines.push(currentLine.trim())
+        currentLine = ''
+        previousItem = null
+        previousY = null
+      }
+    }
+
+    if (currentLine.trim()) lines.push(currentLine.trim())
+    pages.push(lines.filter(Boolean).join('\n'))
+  }
+
+  return pages.join('\n\n').trim()
 }
 
-async function handleFileUpload(event) {
+\\async function handleFileUpload(event) {
   const file = event.target.files?.[0];
-  if (!file) return;
-
+  if (!file) return
   error.value = '';
+  loadingFile.value = true;
 
   try {
-    const headText = await file.slice(0, 4096).text();
+    if (isPdf(file)) {
+        // Import dinâmico: o pdf.js (pesado) só é carregado quando o usuário
+        // realmente escolhe um PDF, e não na abertura do app.
+      const {extractTextFromPdf} = await import('@/utils/pdfText');
+      const pdfText = await extractTextFromPdf(file);
+      
+      if (!pdfText.trim()) {
+        error.value = "Este PDF não tem texto selecionável (parece ser uma imagem escaneada).";
+        return;
+      } 
+      text.value += pdfText;
+    } else{
+      const headText = await file.slice(0, 4096).text();
 
-    if (!isTextContent(headText)) {
-      error.value = "O arquivo selecionado não parece ser um arquivo de texto.";
-      event.target.value = '';
-      return;
+      if (!isTextContent(headText)) {
+        error.value = "O arquivo selecionado não parece ser um arquivo de texto.";
+        return;
+      }
+
+      text.value += await file.text();
+
     }
 
-    const fullText = await file.text();
-    text.value += fullText;
     validate();
+
   } catch {
-    error.value = "Erro ao ler o arquivo.";
+    error.value = "Não foi possível ler o arquivo selecionado.";
+  } finally {
+    loadingFile.value = false;
+
+    // Permite escolher o mesmo arquivo de novo depois.
+    event.target.value = '';
   }
 }
-
+      
 function isTextContent(content) {
-  const sample = content.slice(0, 4096);
-  let printable = 0;
-  for (let i = 0; i < sample.length; i++) {
-    const code = sample.charCodeAt(i);
-    if (code === 0) return false;
-    if (code >= 32 && code <= 126) printable++;
-    else if ([9, 10, 13].includes(code)) printable++;
-    else if (code >= 128) printable++;
+  let printable = 0
+  for (let i = 0; i < content.length; i++) {
+    const code = content.charCodeAt(i)
+    if (code === 0) return false
+    if ((code >= 32 && code <= 126) || [9,10,13].includes(code) || code >= 128) printable++
   }
-  return sample.length === 0 || (printable / sample.length) > 0.8;
+  return !content.length || printable / content.length > 0.8
 }
 
-async function validate() {
-  if (!text.value.trim()) {
-    error.value = "Por favor, insira um texto para leitura.";
-    return false;
-  }
+function tokenizeLocally(value) {
+  const segmenter = new Intl.Segmenter('pt-BR', { granularity: 'word' })
+  return [...segmenter.segment(value)].map(token => ({ index: token.index, text: token.segment, isWord: token.isWordLike }))
+}
 
-  error.value = '';
-
+async function adaptText() {
+  if (!text.value.trim()) { error.value = 'Por favor, insira um texto para leitura.'; return }
+  error.value = ''
+  adapting.value = true
   try {
-    const res = await axios.post(`${import.meta.env.VITE_API_BASE}/read`, { text: text.value });
-
-    if (res.status === 200) {
-      textStore.setTokens(res.data);
-      textStore.setOriginalText(text.value);
-      router.push('/read');
+    let tokens
+    const apiBase = import.meta.env.VITE_API_BASE
+    if (apiBase) {
+      try {
+        const res = await axios.post(`${apiBase}/read`, { text: text.value })
+        tokens = res.data
+      } catch (apiError) {
+        // Durante o desenvolvimento local, o servidor pode não estar iniciado.
+        // O mesmo processamento básico é feito no navegador para a leitura continuar funcionando.
+        tokens = tokenizeLocally(text.value)
+      }
+    } else {
+      tokens = tokenizeLocally(text.value)
     }
+    textStore.setTokens(tokens)
+    textStore.setOriginalText(text.value)
+    textStore.setSavedId(null)
+    await router.push('/read')
   } catch (e) {
-    error.value = e.response?.data?.erro || "Erro ao enviar texto.";
+    error.value = 'Não foi possível preparar o texto para leitura.'
+  } finally {
+    adapting.value = false
   }
+}
+async function focusEditor() {
+  await nextTick()
+  editor.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 </script>
 
 <template>
-  <main>
-    <h3>Digite ou cole seu texto:</h3>
-    <form method="POST" action="/api/read" @submit.prevent="validate">
-      <textarea v-model="text" required></textarea>
-
-      <p v-if="error" class="error-text">{{ error }}</p>
-
-      <div class="button-group">
-        <button type="button" @click="pasteFromClipboard">📋 Colar</button>
-        <button type="button" @click="triggerFileUpload">📂 Carregar .txt</button>
-        <input type="file" ref="fileInput" accept=".txt" @change="handleFileUpload" hidden />
-        <button type="submit">Abrir para leitura →</button>
+  <main class="landing-page">
+    <section class="hero section-shell">
+      <div class="hero-copy">
+        <span class="eyebrow">ACESSIBILIDADE PARA A LEITURA</span>
+        <h1>Transforme textos em uma leitura mais confortável.</h1>
+        <p>Ajuste fonte, espaçamento, cores e ouça o texto em voz alta. Tudo pensado para facilitar a sua leitura.</p>
+        <div class="hero-actions">
+          <button class="primary-button hero-button" @click="focusEditor">Adaptar meu texto <span>→</span></button>
+          <RouterLink class="secondary-button" to="/como-funciona">Como funciona <span>▷</span></RouterLink>
+        </div>
       </div>
-    </form>
+
+      <div class="before-after" aria-label="Exemplo de adaptação de texto">
+        <div class="example-card before-card"><span class="card-label">Antes</span><p class="before-text">A leitura em muitos formatos pode ser desafiadora. Nosso objetivo é tornar os textos mais acessíveis e agradáveis para pessoas com dislexia e outras necessidades de leitura.</p></div>
+        <div class="transform-arrow">→</div>
+        <div class="example-card after-card"><span class="card-label green">Depois</span><p class="after-text">A leitura em muitos formatos pode ser desafiadora. Nosso objetivo é tornar os textos mais acessíveis e agradáveis para pessoas com dislexia e outras necessidades de leitura.</p></div>
+      </div>
+    </section>
+
+    <section ref="editor" id="text-editor" class="editor-section section-shell">
+      <div class="editor-heading"><span class="eyebrow">COMECE AGORA</span><h2>Adapte seu texto para uma leitura mais confortável.</h2><p>Cole um texto ou carregue um arquivo .txt ou .pdf. Depois, personalize a leitura do seu jeito.</p></div>
+      <div class="editor-card">
+        <textarea v-model="text" placeholder="Cole ou escreva seu texto aqui..."></textarea>
+        <p v-if="error" class="error-text">{{ error }}</p>
+        <div class="editor-actions"><button class="secondary-button" type="button" @click="pasteFromClipboard">▣ Colar</button><button class="secondary-button" type="button" @click="triggerFileUpload">□ Carregar .txt ou PDF</button><input ref="fileInput" type="file" accept=".txt,.pdf,application/pdf" hidden @change="handleFileUpload" /><button class="primary-button" type="button" :disabled="adapting" @click="adaptText">{{ adapting ? 'Preparando...' : 'Adaptar meu texto' }} <span>→</span></button></div>
+      </div>
+    </section>
   </main>
 </template>
-
-<style scoped>
-textarea {
-  width: 100%;
-  height: min(50vh, 400px);
-  min-height: 150px;
-  padding: 10px;
-  font-size: 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  resize: none;
-}
-
-main {
-  padding: 20px;
-  max-width: 900px;
-  margin: auto;
-}
-
-h3 {
-  margin-bottom: 14px;
-}
-
-.button-group {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-  align-items: center;
-}
-
-.button-group button[type="submit"] {
-  margin-left: auto;
-}
-
-.error-text {
-  color: var(--color-error);
-}
-
-@media (max-width: 600px) {
-  main {
-    display: flex;
-    flex-direction: column;
-    height: calc(100dvh - 56px);
-    padding: 12px;
-  }
-
-  form {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-  }
-
-  textarea {
-    flex: 1;
-    height: auto;
-  }
-
-  .button-group {
-    flex-wrap: wrap;
-  }
-
-  .button-group button {
-    flex: 1;
-  }
-}
-</style>
