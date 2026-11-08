@@ -1,14 +1,17 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import LoginModal from '@/components/LoginModal.vue'
 import RegisterModal from '@/components/RegisterModal.vue'
 import { useUserStore } from '@/stores/user'
 import { usePreferencesStore } from '@/stores/preferences'
+import {Capacitor} from '@capacitor/core'
+import { App as CapacitorApp } from '@capacitor/app'
 
 const userStore = useUserStore()
 const preferencesStore = usePreferencesStore()
 const route = useRoute()
+const router = useRouter()
 const showLoginModal = ref(false)
 const showRegisterModal = ref(false)
 const mobileMenuOpen = ref(false)
@@ -49,6 +52,24 @@ onMounted(() => {
   mediaQuery?.addEventListener?.('change', syncSystemTheme)
 })
 onBeforeUnmount(() => { document.removeEventListener('click', closeProfile); mediaQuery?.removeEventListener?.('change', syncSystemTheme) })
+
+// Botão "voltar" do Android. Sem isso o Capacitor fecha o app em qualquer tela.
+// Ordem: fecha o que está por cima -> volta uma tela -> minimiza o app na Home.
+let backListener
+function handleBackButton() {
+  if (showLoginModal.value || showRegisterModal.value) { closeModals(); return }
+  if (mobileMenuOpen.value || profileOpen.value) { mobileMenuOpen.value = false; profileOpen.value = false; return }
+  if (window.history.state?.back) { router.back(); return }
+  if (route.path !== '/') { router.push('/'); return }
+  CapacitorApp.minimizeApp()
+}
+onMounted(async () => {
+  if (Capacitor.isNativePlatform()) {
+    backListener = await CapacitorApp.addListener('backButton', handleBackButton)
+  }
+})
+onBeforeUnmount(() => { backListener?.remove() })
+
 </script>
 
 <template>

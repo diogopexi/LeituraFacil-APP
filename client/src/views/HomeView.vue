@@ -1,12 +1,11 @@
 <script setup>
+import { Capacitor } from '@capacitor/core'
+import { Clipboard } from '@capacitor/clipboard'
 import { ref, nextTick } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useTextStore } from '@/stores/text'
-import * as pdfjsLib from 'pdfjs-dist'
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker
 
 const router = useRouter()
 const textStore = useTextStore()
@@ -15,11 +14,11 @@ const error = ref('')
 const fileInput = ref(null)
 const editor = ref(null)
 const adapting = ref(false)
-\\const loadingFile = ref(false);
+const loadingFile = ref(false);
 
 
 
-\\function isPdf(file) {
+function isPdf(file) {
   return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 }
 
@@ -27,73 +26,18 @@ const adapting = ref(false)
 
 async function pasteFromClipboard() {
   try {
-    const value = await navigator.clipboard.readText()
+    const value = Capacitor.isNativePlatform() 
+      ? (await Clipboard.read()).value
+      :await navigator.clipboard.readText()
     if (value) text.value += value
   } catch {
     error.value = 'Não foi possível acessar a área de transferência.'
   }
 }
 function triggerFileUpload() { fileInput.value?.click() }
-async function extractPdfText(file) {
-  const buffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
-  const pages = []
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-    const page = await pdf.getPage(pageNumber)
-    const content = await page.getTextContent()
-    const items = content.items.filter(item => typeof item.str === 'string' && item.str.length)
 
-    if (!items.length) {
-      pages.push('')
-      continue
-    }
-
-    const lines = []
-    let currentLine = ''
-    let previousItem = null
-    let previousY = null
-
-    for (const item of items) {
-      const x = item.transform?.[4] ?? 0
-      const y = item.transform?.[5] ?? 0
-      const width = item.width ?? 0
-      const sameLine = previousY !== null && Math.abs(y - previousY) < 4
-
-      if (!sameLine && currentLine.trim()) {
-        lines.push(currentLine.trim())
-        currentLine = ''
-      }
-
-      if (currentLine && previousItem && sameLine) {
-        const previousText = previousItem.str || ''
-        const previousRight = (previousItem.transform?.[4] ?? 0) + (previousItem.width ?? 0)
-        const gap = x - previousRight
-        const fontSize = Math.abs(item.transform?.[3] ?? item.height ?? 10) || 10
-        const needsSpace = !/[\s]$/.test(previousText) && !/^[\s.,;:!?%)\]}]/.test(item.str) && gap > fontSize * 0.12
-        if (needsSpace) currentLine += ' '
-      }
-
-      currentLine += item.str
-      previousItem = item
-      previousY = y
-
-      if (item.hasEOL) {
-        if (currentLine.trim()) lines.push(currentLine.trim())
-        currentLine = ''
-        previousItem = null
-        previousY = null
-      }
-    }
-
-    if (currentLine.trim()) lines.push(currentLine.trim())
-    pages.push(lines.filter(Boolean).join('\n'))
-  }
-
-  return pages.join('\n\n').trim()
-}
-
-\\async function handleFileUpload(event) {
+async function handleFileUpload(event) {
   const file = event.target.files?.[0];
   if (!file) return
   error.value = '';
@@ -150,24 +94,21 @@ function tokenizeLocally(value) {
   return [...segmenter.segment(value)].map(token => ({ index: token.index, text: token.segment, isWord: token.isWordLike }))
 }
 
+
 async function adaptText() {
   if (!text.value.trim()) { error.value = 'Por favor, insira um texto para leitura.'; return }
   error.value = ''
   adapting.value = true
   try {
+    // A tokenização roda no próprio aparelho: leva milissegundos e não depende de rede.
+    // O servidor só é chamado se o navegador não tiver Intl.Segmenter (aparelhos muito antigos).
     let tokens
-    const apiBase = import.meta.env.VITE_API_BASE
-    if (apiBase) {
-      try {
-        const res = await axios.post(`${apiBase}/read`, { text: text.value })
-        tokens = res.data
-      } catch (apiError) {
-        // Durante o desenvolvimento local, o servidor pode não estar iniciado.
-        // O mesmo processamento básico é feito no navegador para a leitura continuar funcionando.
-        tokens = tokenizeLocally(text.value)
-      }
-    } else {
+    if (typeof Intl.Segmenter === 'function') {
       tokens = tokenizeLocally(text.value)
+    } else {
+      const apiBase = import.meta.env.VITE_API_BASE || '/api'
+      const res = await axios.post(`${apiBase}/read`, { text: text.value }, { timeout: 5000 })
+      tokens = res.data
     }
     textStore.setTokens(tokens)
     textStore.setOriginalText(text.value)
@@ -179,6 +120,8 @@ async function adaptText() {
     adapting.value = false
   }
 }
+
+
 async function focusEditor() {
   await nextTick()
   editor.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
